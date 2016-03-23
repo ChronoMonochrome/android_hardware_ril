@@ -1,6 +1,6 @@
 # Copyright 2006 The Android Open Source Project
 
-ifneq ($(BOARD_PROVIDES_LIBRIL),true)
+ifeq ($(BOARD_PROVIDES_LIBRIL),true)
 
 LOCAL_PATH:= $(call my-dir)
 include $(CLEAR_VARS)
@@ -22,13 +22,21 @@ LOCAL_SHARED_LIBRARIES := \
 LOCAL_STATIC_LIBRARIES := \
     libprotobuf-c-nano-enable_malloc \
 
-#LOCAL_CFLAGS := -DANDROID_MULTI_SIM -DDSDA_RILD1
-
-ifeq ($(SIM_COUNT), 2)
-    LOCAL_CFLAGS += -DANDROID_SIM_COUNT_2
+ifneq ($(filter xmm6262 xmm6360,$(BOARD_MODEM_TYPE)),)
+LOCAL_CFLAGS := -DMODEM_TYPE_XMM6262
+endif
+ifeq ($(BOARD_MODEM_TYPE),xmm6260)
+LOCAL_CFLAGS := -DMODEM_TYPE_XMM6260
+endif
+ifneq ($(filter m7450 mdm9x35 ss333 xmm7260,$(BOARD_MODEM_TYPE)),)
+LOCAL_CFLAGS := -DSAMSUNG_NEXT_GEN_MODEM
 endif
 
-LOCAL_C_INCLUDES += $(TARGET_OUT_HEADERS)/librilutils
+ifneq ($(filter m7450 xmm7260,$(BOARD_MODEM_TYPE)),)
+LOCAL_CFLAGS += -DNEEDS_VIDEO_CALL_FIELD
+endif
+
+LOCAL_C_INCLUDES += $(TARGET_OUT_HEADER)/librilutils
 LOCAL_C_INCLUDES += external/nanopb-c
 
 LOCAL_MODULE:= libril
@@ -37,7 +45,6 @@ LOCAL_COPY_HEADERS_TO := libril
 LOCAL_COPY_HEADERS := ril_ex.h
 
 include $(BUILD_SHARED_LIBRARY)
-
 
 # For RdoServD which needs a static library
 # =========================================
@@ -53,7 +60,12 @@ LOCAL_STATIC_LIBRARIES := \
     librilutils_static \
     libprotobuf-c-nano-enable_malloc
 
-LOCAL_CFLAGS :=
+ifneq ($(filter xmm6262 xmm6360,$(BOARD_MODEM_TYPE)),)
+LOCAL_CFLAGS := -DMODEM_TYPE_XMM6262
+endif
+ifeq ($(BOARD_MODEM_TYPE),xmm6260)
+LOCAL_CFLAGS := -DMODEM_TYPE_XMM6260
+endif
 
 LOCAL_MODULE:= libril_static
 
