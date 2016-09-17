@@ -43,7 +43,8 @@ static const RIL_RadioFunctions *origRilFunctions;
 static const struct RIL_Env *rilEnv;
 
 static void onRequestCompleteShim(RIL_Token t, RIL_Errno e, void *response, size_t responselen) {
-	int request;
+	int request, i;
+	unsigned char *pc;
 	RequestInfo *pRI;
 
 	pRI = (RequestInfo *)t;
@@ -57,15 +58,16 @@ static void onRequestCompleteShim(RIL_Token t, RIL_Errno e, void *response, size
 	}
 
 	request = pRI->pCI->requestNumber;
-    RLOGD("onRequestCompleteShim: %s", requestToString(request));
-    ril_hexDump(NULL, response, responselen);
+
+    RLOGD("onRequestCompleteShim: %s (%d)", requestToString(request), request);
+    __ril_hexDump(LOG_TAG, NULL, response, responselen);
 	rilEnv->OnRequestComplete(t, e, response, responselen);
-    RLOGD("onRequestCompleteShim %s - finished", requestToString(request));
+    RLOGD("onRequestCompleteShim %s (%d) - finished", requestToString(request)), request;
 }
 
 static void onRequestShim (int request, void *data, size_t datalen, RIL_Token t) {
     RLOGD("onRequestShim: %s", requestToString(request));
-    ril_hexDump(NULL, data, datalen);
+    __ril_hexDump(LOG_TAG, NULL, data, datalen);
 
     origRilFunctions->onRequest(request, data, datalen, t);
 }
@@ -76,7 +78,7 @@ const RIL_RadioFunctions* RIL_Init_Shim(void *rilInit, const struct RIL_Env *env
 	static RIL_RadioFunctions shimmedFunctions;
 	static struct RIL_Env shimmedEnv;
 
-    RLOGI("RIL_Init_Shim");
+	RLOGI("RIL_Init_Shim");
 
 	/* Shim the RIL_Env passed to the real RIL, saving a copy of the original */
 	rilEnv = env;

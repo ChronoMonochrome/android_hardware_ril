@@ -67,6 +67,7 @@ namespace android {
 
 
 #define PROPERTY_RIL_IMPL "gsm.version.ril-impl"
+#define PROPERTY_QAN_ELEMENTS "ro.ril.telephony.mqanelements"
 
 // match with constant in RIL.java
 #define MAX_COMMAND_BYTES (8 * 1024)
@@ -280,6 +281,8 @@ static void dispatchDataProfile(Parcel &p, RequestInfo *pRI);
 static void dispatchRadioCapability(Parcel &p, RequestInfo *pRI);
 static int responseInts(Parcel &p, void *response, size_t responselen);
 static int responseStrings(Parcel &p, void *response, size_t responselen);
+static int responseStrings(Parcel &p, void *response, size_t responselen, bool network_search);
+static int responseStringsNetworks(Parcel &p, void *response, size_t responselen);
 static int responseString(Parcel &p, void *response, size_t responselen);
 static int responseVoid(Parcel &p, void *response, size_t responselen);
 static int responseCallList(Parcel &p, void *response, size_t responselen);
@@ -306,6 +309,11 @@ static int responseHardwareConfig(Parcel &p, void *response, size_t responselen)
 static int responseDcRtInfo(Parcel &p, void *response, size_t responselen);
 static int responseRadioCapability(Parcel &p, void *response, size_t responselen);
 static int responseSSData(Parcel &p, void *response, size_t responselen);
+static int responseLceStatus(Parcel &p, void *response, size_t responselen);
+static int responseLceData(Parcel &p, void *response, size_t responselen);
+static int responseActivityData(Parcel &p, void *response, size_t responselen);
+
+static int responseIntsGetPreferredNetworkType(Parcel &p, void *response, size_t responselen);
 
 static int decodeVoiceRadioTechnology (RIL_RadioState radioState);
 static int decodeCdmaSubscriptionSource (RIL_RadioState radioState);
@@ -2164,11 +2172,97 @@ responseInts(Parcel &p, void *response, size_t responselen) {
     return 0;
 }
 
+static int
+responseIntsGetPreferredNetworkType(Parcel &p, void *response, size_t responselen) {
+    int numInts;
+
+    if (response == NULL && responselen != 0) {
+        RLOGE("invalid response: NULL");
+        return RIL_ERRNO_INVALID_RESPONSE;
+    }
+    if (responselen % sizeof(int) != 0) {
+        RLOGE("responseInts: invalid response length %d expected multiple of %d\n",
+            (int)responselen, (int)sizeof(int));
+        return RIL_ERRNO_INVALID_RESPONSE;
+    }
+
+    int *p_int = (int *) response;
+
+    numInts = responselen / sizeof(int);
+    p.writeInt32 (numInts);
+
+    /* each int*/
+    startResponse;
+    for (int i = 0 ; i < numInts ; i++) {
+        if (i == 0 && p_int[0] == 7) {
+            RLOGD("REQUEST_GET_PREFERRED_NETWORK_TYPE: NETWORK_MODE_GLOBAL => NETWORK_MODE_WCDMA_PREF");
+            p_int[0] = 0;
+        }
+        appendPrintBuf("%s%d,", printBuf, p_int[i]);
+        p.writeInt32(p_int[i]);
+    }
+    removeLastChar;
+    closeResponse;
+
+    return 0;
+}
+
+/** response is a char **, pointing to an array of char *'s */
+static int responseStrings(Parcel &p, void *response, size_t responselen, bool network_search) {
+    int numStrings;
+
+    if (response == NULL && responselen != 0) {
+        RLOGE("invalid response: NULL");
+        return RIL_ERRNO_INVALID_RESPONSE;
+    }
+    if (responselen % sizeof(char *) != 0) {
+        RLOGE("responseStrings: invalid response length %d expected multiple of %d\n",
+            (int)responselen, (int)sizeof(char *));
+        return RIL_ERRNO_INVALID_RESPONSE;
+    }
+
+    if (response == NULL) {
+        p.writeInt32 (0);
+    } else {
+        char **p_cur = (char **) response;
+
+        numStrings = responselen / sizeof(char *);
+        if (network_search) {
+            int32_t QANElements;
+
+            /*
+             * This needs to be set to same value as mQANElements in the RIL
+             * Telephony class.
+             */
+            QANElements = property_get_int32(PROPERTY_QAN_ELEMENTS, 4);
+            p.writeInt32 ((numStrings / 5) * QANElements);
+        } else {
+            p.writeInt32 (numStrings);
+        }
+
+        /* each string*/
+        startResponse;
+        for (int i = 0 ; i < numStrings ; i++) {
+            if (network_search && ((i + 1) % 5 == 0))
+                continue;
+            appendPrintBuf("%s%s,", printBuf, (char*)p_cur[i]);
+            writeStringToParcel (p, p_cur[i]);
+        }
+        removeLastChar;
+        closeResponse;
+    }
+    return 0;
+}
+
 /** response is a char **, pointing to an array of char *'s
     The parcel will begin with the version */
 static int responseStringsWithVersion(int version, Parcel &p, void *response, size_t responselen) {
     p.writeInt32(version);
     return responseStrings(p, response, responselen);
+}
+
+static int responseStringsNetworks(Parcel &p, void *response, size_t responselen) {
+    return responseStrings(p, response, responselen, true);
 }
 
 /** response is a char **, pointing to an array of char *'s */
@@ -3579,6 +3673,90 @@ static int responseDcRtInfo(Parcel &p, void *response, size_t responselen)
     return 0;
 }
 
+static int responseLceStatus(Parcel &p, void *response, size_t responselen) {
+  if (response == NULL || responselen != sizeof(RIL_LceStatusInfo)) {
+    if (response == NULL) {
+      RLOGE("invalid response: NULL");
+    }
+    else {
+      RLOGE("responseLceStatus: invalid response length %d expecting len: d%",
+            sizeof(RIL_LceStatusInfo), responselen);
+    }
+    return RIL_ERRNO_INVALID_RESPONSE;
+  }
+
+  RIL_LceStatusInfo *p_cur = (RIL_LceStatusInfo *)response;
+  p.write((void *)p_cur, 1);  // p_cur->lce_status takes one byte.
+  p.writeInt32(p_cur->actual_interval_ms);
+
+  startResponse;
+  appendPrintBuf("LCE Status: %d, actual_interval_ms: %d",
+                 p_cur->lce_status, p_cur->actual_interval_ms);
+  closeResponse;
+
+  return 0;
+}
+
+static int responseLceData(Parcel &p, void *response, size_t responselen) {
+  if (response == NULL || responselen != sizeof(RIL_LceDataInfo)) {
+    if (response == NULL) {
+      RLOGE("invalid response: NULL");
+    }
+    else {
+      RLOGE("responseLceData: invalid response length %d expecting len: d%",
+            sizeof(RIL_LceDataInfo), responselen);
+    }
+    return RIL_ERRNO_INVALID_RESPONSE;
+  }
+
+  RIL_LceDataInfo *p_cur = (RIL_LceDataInfo *)response;
+  p.writeInt32(p_cur->last_hop_capacity_kbps);
+
+  /* p_cur->confidence_level and p_cur->lce_suspended take 1 byte each.*/
+  p.write((void *)&(p_cur->confidence_level), 1);
+  p.write((void *)&(p_cur->lce_suspended), 1);
+
+  startResponse;
+  appendPrintBuf("LCE info received: capacity %d confidence level %d"
+                  "and suspended %d",
+                  p_cur->last_hop_capacity_kbps, p_cur->confidence_level,
+                  p_cur->lce_suspended);
+  closeResponse;
+
+  return 0;
+}
+
+static int responseActivityData(Parcel &p, void *response, size_t responselen) {
+  if (response == NULL || responselen != sizeof(RIL_ActivityStatsInfo)) {
+    if (response == NULL) {
+      RLOGE("invalid response: NULL");
+    }
+    else {
+      RLOGE("responseActivityData: invalid response length %d expecting len: d%",
+            sizeof(RIL_ActivityStatsInfo), responselen);
+    }
+    return RIL_ERRNO_INVALID_RESPONSE;
+  }
+
+  RIL_ActivityStatsInfo *p_cur = (RIL_ActivityStatsInfo *)response;
+  p.writeInt32(p_cur->sleep_mode_time_ms);
+  p.writeInt32(p_cur->idle_mode_time_ms);
+  for(int i = 0; i < RIL_NUM_TX_POWER_LEVELS; i++) {
+    p.writeInt32(p_cur->tx_mode_time_ms[i]);
+  }
+  p.writeInt32(p_cur->rx_mode_time_ms);
+
+  startResponse;
+  appendPrintBuf("Modem activity info received: sleep_mode_time_ms %d idle_mode_time_ms %d"
+                 "tx_mode_time_ms %d %d %d %d %d and rx_mode_time_ms %d",
+                  p_cur->sleep_mode_time_ms, p_cur->idle_mode_time_ms, p_cur->tx_mode_time_ms[0],
+                  p_cur->tx_mode_time_ms[1], p_cur->tx_mode_time_ms[2], p_cur->tx_mode_time_ms[3],
+                  p_cur->tx_mode_time_ms[4], p_cur->rx_mode_time_ms);
+   closeResponse;
+
+  return 0;
+}
+
 /**
  * A write on the wakeup fd is done just to pop us out of select()
  * We empty the buffer here and then ril_event will reset the timers on the
@@ -4336,7 +4514,7 @@ checkAndDequeueRequestInfo(struct RequestInfo *pRI) {
 extern "C" void
 RIL_onRequestComplete(RIL_Token t, RIL_Errno e, void *response, size_t responselen) {
     RequestInfo *pRI;
-    int ret;
+    int ret, request;
     int fd = s_ril_param_socket.fdCommand;
     size_t errorOffset;
     RIL_SOCKET_ID socket_id = RIL_SOCKET_1;
