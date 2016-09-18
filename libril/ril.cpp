@@ -2351,6 +2351,7 @@ static int responseCallList(Parcel &p, void *response, size_t responselen) {
         p.writeInt32(p_cur->als);
         p.writeInt32(p_cur->isVoice);
         p.writeInt32(p_cur->isVoicePrivacy);
+        p.writeInt32(0); /* chrono: send an extra zero before we send the number */
         writeStringToParcel(p, p_cur->number);
         p.writeInt32(1); /* numberPresentation */
         writeStringToParcel(p, NULL); /* name */
