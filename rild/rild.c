@@ -35,10 +35,6 @@
 #include <private/android_filesystem_config.h>
 #include "hardware/qemu_pipe.h"
 
-#include "ril-shim.h"
-#define RIL_INIT_SHIM 1
-
-
 #define LIB_PATH_PROPERTY   "rild.libpath"
 #define LIB_ARGS_PROPERTY   "rild.libargs"
 #define MAX_LIB_ARGS        16
@@ -312,7 +308,9 @@ OpenLib:
 
     RIL_startEventLoop();
 
-    rilInit = (const RIL_RadioFunctions *(*)(const struct RIL_Env *, int, char **))dlsym(dlHandle, "RIL_Init");
+    rilInit =
+        (const RIL_RadioFunctions *(*)(const struct RIL_Env *, int, char **))
+        dlsym(dlHandle, "RIL_Init");
 
     if (rilInit == NULL) {
         RLOGE("RIL_Init not defined or exported in %s\n", rilLibPath);
@@ -330,36 +328,15 @@ OpenLib:
         argc = make_argv(args, rilArgv);
     }
 
-#ifdef QCOM_HARDWARE
     rilArgv[argc++] = "-c";
     rilArgv[argc++] = clientId;
     RLOGD("RIL_Init argc = %d clientId = %s", argc, rilArgv[argc-1]);
-#endif
 
     // Make sure there's a reasonable argv[0]
     rilArgv[0] = argv[0];
 
-#if RIL_INIT_SHIM
-    funcs = RIL_Init_Shim(rilInit, &s_rilEnv, argc, rilArgv);
-
-    RIL_Shim_AddSignalHandlers();
-#else
     funcs = rilInit(&s_rilEnv, argc, rilArgv);
-#endif
     RLOGD("RIL_Init rilInit completed");
-
-#ifdef QCOM_HARDWARE
-    if (funcs == NULL) {
-        /* Pre-multi-client qualcomm vendor libraries won't support "-c" either, so
-         * try again without it. This should only happen on ancient qcoms, so raise
-         * a big fat warning
-         */
-        argc -= 2;
-        RLOGE("============= Retrying RIL_Init without a client id. This is only required for very old versions,");
-        RLOGE("============= and you're likely to have more radio breakage elsewhere!");
-        funcs = rilInit(&s_rilEnv, argc, rilArgv);
-    }
-#endif
 
     RIL_register(funcs);
 
