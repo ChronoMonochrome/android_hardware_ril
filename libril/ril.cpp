@@ -500,8 +500,6 @@ processCommandBuffer(void *buffer, size_t buflen, RIL_SOCKET_ID socket_id) {
     status = p.readInt32(&request);
     status = p.readInt32 (&token);
 
-    RLOGD("processCommandBuffer, request = %s (%d), token = %d", requestToString(request), request, token);
-
 #if (SIM_COUNT >= 2)
     if (socket_id == RIL_SOCKET_2) {
         pendingRequestsMutexHook = &s_pendingRequestsMutex_socket2;
