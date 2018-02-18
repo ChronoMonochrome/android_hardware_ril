@@ -2,6 +2,9 @@
 
 # XXX using libutils for simulator build only...
 #
+
+ifeq (false,true)
+
 LOCAL_PATH:= $(call my-dir)
 include $(CLEAR_VARS)
 
@@ -45,3 +48,5 @@ else
   LOCAL_MODULE:= reference-ril
   include $(BUILD_EXECUTABLE)
 endif
+
+endif # false

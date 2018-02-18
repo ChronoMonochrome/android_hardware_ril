@@ -1,5 +1,7 @@
 # Copyright 2013 The Android Open Source Project
 
+ifeq ($(BOARD_USES_STE_HARDWARE),true)
+
 LOCAL_PATH:= $(call my-dir)
 include $(CLEAR_VARS)
 
@@ -51,3 +53,4 @@ LOCAL_SRC_FILES := proto/sap-api.proto
 LOCAL_PROTOC_OPTIMIZE_TYPE := micro
 
 include $(BUILD_STATIC_JAVA_LIBRARY)
+endif # BOARD_USES_STE_HARDWARE

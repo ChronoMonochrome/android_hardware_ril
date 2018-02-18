@@ -1,5 +1,7 @@
 # Copyright 2006 The Android Open Source Project
 
+ifeq ($(BOARD_USES_STE_HARDWARE),true)
+
 LOCAL_PATH:= $(call my-dir)
 include $(CLEAR_VARS)
 
@@ -48,3 +50,4 @@ LOCAL_MODULE:= radiooptions
 LOCAL_MODULE_TAGS := debug
 
 include $(BUILD_EXECUTABLE)
+endif # BOARD_USES_STE_HARDWARE
